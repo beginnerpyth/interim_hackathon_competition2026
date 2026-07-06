@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organizer Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark mb-4">
+  <div class="container">
+    <span class="navbar-brand">🎓 Organizer Dashboard</span>
+    <a href="index.html" class="btn btn-outline-light btn-sm">Back to Student View</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- LOGIN / REGISTER SECTION -->
+  <div id="authSection" class="row justify-content-center">
+    <div class="col-md-5">
+      <div class="card p-4 mb-3">
+        <h5>Organizer Login</h5>
+        <form id="loginForm">
+          <input type="text" id="loginUsername" class="form-control mb-2" placeholder="Username" required>
+          <input type="password" id="loginPassword" class="form-control mb-2" placeholder="Password" required>
+          <button type="submit" class="btn btn-primary w-100">Login</button>
+        </form>
+      </div>
+      <div class="card p-4">
+        <h5>New Organizer? Register</h5>
+        <form id="registerForm">
+          <input type="text" id="registerUsername" class="form-control mb-2" placeholder="Choose a username" required>
+          <input type="password" id="registerPassword" class="form-control mb-2" placeholder="Choose a password" required>
+          <button type="submit" class="btn btn-secondary w-100">Register</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD (shown after login) -->
+  <div id="dashboardSection" style="display:none;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4>Your Events</h4>
+      <div>
+        <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createEventModal">+ New Event</button>
+        <button class="btn btn-outline-danger" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+    <div id="organizerEventsList" class="row g-4"></div>
+  </div>
+
+</div>
+
+<!-- Create Event Modal -->
+<div class="modal fade" id="createEventModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="createEventForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Create Event</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Title</label>
+            <input type="text" class="form-control" id="eventTitle" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea class="form-control" id="eventDescription" rows="3"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Team Size</label>
+            <input type="number" class="form-control" id="eventTeamSize" min="1" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Application Deadline</label>
+            <input type="datetime-local" class="form-control" id="eventDeadline">
+            <div class="form-text">After this time, teams are generated automatically. Leave blank to generate teams manually instead.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Photo</label>
+            <input type="file" class="form-control" id="eventPhoto" accept="image/*">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Create Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Applications Modal -->
+<div class="modal fade" id="applicationsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Applications</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table">
+          <thead><tr><th>Name</th><th>Email</th><th>Grade</th></tr></thead>
+          <tbody id="applicationsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Teams Modal (organizer view) -->
+<div class="modal fade" id="orgTeamsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Generated Teams</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="orgTeamsContainer" class="row g-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/organizer.js"></script>
+</body>
+</html>

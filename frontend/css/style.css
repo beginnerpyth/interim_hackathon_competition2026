@@ -1,0 +1,9 @@
+.event-image {
+  height: 180px;
+  object-fit: cover;
+  background-color: #f0f0f0;
+}
+
+body {
+  background-color: #fafafa;
+}
