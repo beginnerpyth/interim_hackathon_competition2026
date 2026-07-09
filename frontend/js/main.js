@@ -1,19 +1,42 @@
+// ---------- Auth guard ----------
+const currentAuth = requireRole("student");
+// requireRole already redirects to login.html if not a logged-in student.
+
 const eventsList = document.getElementById("events-list");
 const searchInput = document.getElementById("searchInput");
 const filterButtons = document.querySelectorAll(".filter-btn");
+const categoryTabs = document.querySelectorAll(".category-tab");
 
-let allEvents = [];       // full list fetched from backend
-let currentFilter = "all"; // "all" | "open" | "closed"
+let allEvents = [];
+let currentFilter = "all";
+let currentCategory = "event";
+
+// ---------- Load student profile (for greeting + faculty/grade context) ----------
+
+async function loadProfile() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/student/me`, { headers: authHeader() });
+    if (!res.ok) throw new Error("profile fetch failed");
+    const student = await res.json();
+    document.getElementById("studentNameLabel").textContent = `${student.name} さん`;
+  } catch (err) {
+    console.error(err);
+    // If the token is invalid/expired, bounce to login.
+    logout();
+  }
+}
+
+// ---------- Load events (filtered by category server-side) ----------
 
 async function loadEvents() {
-  eventsList.innerHTML = `<p class="text-muted">Loading events...</p>`;
+  eventsList.innerHTML = `<p class="text-muted">読み込み中...</p>`;
   try {
-    const res = await fetch(`${API_BASE_URL}/events`);
+    const res = await fetch(`${API_BASE_URL}/events?category=${currentCategory}`);
     const events = await res.json();
     allEvents = events;
     renderEvents();
   } catch (err) {
-    eventsList.innerHTML = `<p class="text-danger">Could not load events. Is the backend running?</p>`;
+    eventsList.innerHTML = `<p class="text-danger">イベントを読み込めませんでした。</p>`;
     console.error(err);
   }
 }
@@ -35,31 +58,51 @@ function renderEvents() {
 
     if (currentFilter === "open") return !isDeadlinePassed(event);
     if (currentFilter === "closed") return isDeadlinePassed(event);
-    return true; // "all"
+    return true;
   });
 
   if (allEvents.length === 0) {
-    eventsList.innerHTML = `<p class="text-muted">No events yet. Check back soon!</p>`;
+    eventsList.innerHTML = `
+      <div class="col-12">
+        <div class="board-empty">
+          <div class="board-empty-title">まだ何も掲示されていません</div>
+          <div>このカテゴリーの投稿はまだありません。</div>
+        </div>
+      </div>`;
     return;
   }
 
   if (filtered.length === 0) {
-    eventsList.innerHTML = `<p class="text-muted">No events match your search/filter.</p>`;
+    eventsList.innerHTML = `
+      <div class="col-12">
+        <div class="board-empty">
+          <div class="board-empty-title">一致する結果がありません</div>
+          <div>検索条件やフィルターを変えてみてください。</div>
+        </div>
+      </div>`;
     return;
   }
 
   eventsList.innerHTML = "";
   filtered.forEach((event) => {
     const col = document.createElement("div");
-    col.className = "col-md-4";
+    col.className = "col-md-4 pin-card-wrap";
     const deadlinePassed = isDeadlinePassed(event);
     const deadlineText = event.deadline
       ? (deadlinePassed
-          ? `<span class="text-danger">Applications closed</span>`
-          : `Apply by: ${new Date(event.deadline + "Z").toLocaleString()}`)
+          ? `締切済み`
+          : `締切: ${new Date(event.deadline + "Z").toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}`)
+      : "締切なし";
+    const isFull = event.max_participants != null && event.current_participants >= event.max_participants;
+    const participantsText = event.max_participants != null
+      ? `👥 ${event.current_participants} / ${event.max_participants} 人`
+      : `👥 ${event.current_participants} 人参加中`;
+    const remainingText = event.max_participants != null
+      ? `残り${Math.max(0, event.max_participants - event.current_participants)}人`
       : "";
     col.innerHTML = `
-      <div class="card h-100 shadow-sm">
+      <div class="card h-100 pin-card" data-category="${event.category}">
+        <div class="pin-dot"></div>
         <img src="${API_BASE_URL}/events/${event.id}/image"
              class="card-img-top event-image"
              alt="${escapeHtml(event.title)}"
@@ -67,29 +110,36 @@ function renderEvents() {
         <div class="card-body d-flex flex-column">
           <h5 class="card-title">${escapeHtml(event.title)}</h5>
           <p class="card-text">${escapeHtml(event.description || "")}</p>
-          <p class="text-muted small">Team size: ${event.team_size}</p>
-          <p class="small">${deadlineText}</p>
-          <div class="mt-auto d-flex gap-2">
-            <button class="btn btn-primary btn-sm flex-fill apply-btn" ${deadlinePassed ? "disabled" : ""} data-event-id="${event.id}" data-event-title="${escapeHtml(event.title)}">${deadlinePassed ? "Closed" : "Apply"}</button>
-            <button class="btn btn-outline-secondary btn-sm flex-fill teams-btn" data-event-id="${event.id}" data-event-title="${escapeHtml(event.title)}">View Teams</button>
+          <div class="stamp-row">
+            <span class="stamp stamp-size">${event.team_size}人チーム</span>
+            <span class="stamp ${deadlinePassed ? "stamp-closed" : "stamp-open"}">${deadlineText}</span>
           </div>
+          <div class="stamp-row">
+            <span class="stamp ${isFull ? "stamp-closed" : "stamp-size"}">${participantsText}${remainingText ? ` · ${remainingText}` : ""}</span>
+          </div>
+          <div class="mt-auto d-flex gap-2">
+            <button class="btn btn-primary btn-sm flex-fill apply-btn" ${(deadlinePassed || isFull) ? "disabled" : ""} data-event-id="${event.id}" data-event-title="${escapeHtml(event.title)}">${deadlinePassed ? "締切" : (isFull ? "定員に達しました" : "応募する")}</button>
+            <button class="btn btn-outline-secondary btn-sm flex-fill teams-btn" data-event-id="${event.id}" data-event-title="${escapeHtml(event.title)}">チームを見る</button>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm w-100 mt-2 comments-btn" data-event-id="${event.id}" data-event-title="${escapeHtml(event.title)}">💬 質問・コメント</button>
+          <button class="btn btn-outline-secondary btn-sm w-100 mt-2 ai-consult-btn" data-event-id="${event.id}" data-event-title="${escapeHtml(event.title)}">🤖 AIに相談</button>
         </div>
       </div>
     `;
     eventsList.appendChild(col);
   });
 
-  // Wire up buttons after inserting into the DOM (avoids inline onclick +
-  // avoids breaking on apostrophes/quotes in event titles).
   eventsList.querySelectorAll(".apply-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      openApplyModal(btn.dataset.eventId, btn.dataset.eventTitle);
-    });
+    btn.addEventListener("click", () => openApplyChoice(btn.dataset.eventId, btn.dataset.eventTitle, btn));
   });
   eventsList.querySelectorAll(".teams-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      openTeamsModal(btn.dataset.eventId, btn.dataset.eventTitle);
-    });
+    btn.addEventListener("click", () => openTeamsModal(btn.dataset.eventId, btn.dataset.eventTitle));
+  });
+  eventsList.querySelectorAll(".comments-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openCommentsModal(btn.dataset.eventId, btn.dataset.eventTitle));
+  });
+  eventsList.querySelectorAll(".ai-consult-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openAiConsult(btn.dataset.eventId, btn.dataset.eventTitle));
   });
 }
 
@@ -99,7 +149,140 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ---------- Search + Filter wiring ----------
+// ---------- Apply: choice step (individual vs team) ----------
+
+let pendingApplyButton = null; // so we can update its label/disabled state after either flow finishes
+
+function openApplyChoice(eventId, title, buttonEl) {
+  pendingApplyButton = buttonEl;
+  document.getElementById("choiceEventTitle").textContent = title;
+
+  const event = allEvents.find((e) => String(e.id) === String(eventId));
+
+  const choiceModalEl = document.getElementById("applyChoiceModal");
+  const choiceModal = new bootstrap.Modal(choiceModalEl);
+
+  const individualBtn = document.getElementById("choiceIndividualBtn");
+  const teamBtn = document.getElementById("choiceTeamBtn");
+
+  // Replace with fresh clones each time to avoid stacking duplicate listeners.
+  const newIndividualBtn = individualBtn.cloneNode(true);
+  individualBtn.parentNode.replaceChild(newIndividualBtn, individualBtn);
+  const newTeamBtn = teamBtn.cloneNode(true);
+  teamBtn.parentNode.replaceChild(newTeamBtn, teamBtn);
+
+  newIndividualBtn.addEventListener("click", () => {
+    choiceModal.hide();
+    applyIndividually(eventId, title);
+  });
+
+  newTeamBtn.addEventListener("click", () => {
+    choiceModal.hide();
+    openTeamApplyModal(eventId, title, event?.team_size || 1);
+  });
+
+  choiceModal.show();
+}
+
+// ---------- Apply: individual ----------
+
+async function applyIndividually(eventId, title) {
+  if (!confirm(`「${title}」に個人で応募しますか？`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/events/${eventId}/apply`, {
+      method: "POST",
+      headers: authHeader(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "応募に失敗しました。");
+    }
+
+    alert("応募が完了しました！チームは締切後に自動編成されます。");
+    if (pendingApplyButton) {
+      pendingApplyButton.disabled = true;
+      pendingApplyButton.textContent = "応募済み";
+    }
+  } catch (err) {
+    alert(err.message);
+    console.error(err);
+  }
+}
+
+// ---------- Apply: as a team ----------
+
+function openTeamApplyModal(eventId, title, teamSize) {
+  document.getElementById("teamApplyEventId").value = eventId;
+  document.getElementById("teamApplyEventTitle").textContent = title;
+  document.getElementById("teamApplySizeLabel").textContent = teamSize;
+
+  const teammateCount = Math.max(0, teamSize - 1);
+  const inputsContainer = document.getElementById("teammateInputs");
+  inputsContainer.innerHTML = "";
+  for (let i = 0; i < teammateCount; i++) {
+    const div = document.createElement("div");
+    div.className = "mb-2";
+    div.innerHTML = `
+      <label class="form-label small">チームメイト ${i + 1} のユーザー名</label>
+      <input type="text" class="form-control teammate-username-input" required placeholder="username">
+    `;
+    inputsContainer.appendChild(div);
+  }
+
+  if (teammateCount === 0) {
+    inputsContainer.innerHTML = `<p class="text-muted">このイベントは1人チームです。個人応募を選んでください。</p>`;
+  }
+
+  new bootstrap.Modal(document.getElementById("teamApplyModal")).show();
+}
+
+const teamApplyFormEl = document.getElementById("teamApplyForm");
+if (teamApplyFormEl) {
+  teamApplyFormEl.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const eventId = document.getElementById("teamApplyEventId").value;
+
+  const usernames = Array.from(document.querySelectorAll(".teammate-username-input"))
+    .map((input) => input.value.trim())
+    .filter(Boolean);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/events/${eventId}/apply-team`, {
+      method: "POST",
+      headers: { ...authHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ teammate_usernames: usernames }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "チーム応募に失敗しました。");
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById("teamApplyModal")).hide();
+    alert("チームでの応募が完了しました！");
+    if (pendingApplyButton) {
+      pendingApplyButton.disabled = true;
+      pendingApplyButton.textContent = "応募済み";
+    }
+  } catch (err) {
+    alert(err.message);
+    console.error(err);
+  }
+  });
+}
+
+// ---------- Category tabs ----------
+
+categoryTabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    categoryTabs.forEach((t) => t.classList.remove("active"));
+    tab.classList.add("active");
+    currentCategory = tab.dataset.category;
+    loadEvents();
+  });
+});
+
+// ---------- Search + Filter ----------
 
 if (searchInput) {
   searchInput.addEventListener("input", renderEvents);
@@ -114,50 +297,12 @@ filterButtons.forEach((btn) => {
   });
 });
 
-// ---------- Apply ----------
-
-function openApplyModal(eventId, title) {
-  document.getElementById("applyEventId").value = eventId;
-  document.getElementById("applyEventTitle").textContent = title;
-  document.getElementById("applyForm").reset();
-  document.getElementById("applyEventId").value = eventId; // reset() clears hidden input too, so set again
-  new bootstrap.Modal(document.getElementById("applyModal")).show();
-}
-
-document.getElementById("applyForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const eventId = document.getElementById("applyEventId").value;
-  const payload = {
-    name: document.getElementById("applyName").value,
-    email: document.getElementById("applyEmail").value,
-    grade: document.getElementById("applyGrade").value,
-  };
-
-  try {
-    const res = await fetch(`${API_BASE_URL}/events/${eventId}/apply`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || "Failed to apply");
-    }
-
-    bootstrap.Modal.getInstance(document.getElementById("applyModal")).hide();
-    alert("Application submitted! Check back later to see your team.");
-  } catch (err) {
-    alert(err.message || "Something went wrong submitting your application.");
-    console.error(err);
-  }
-});
-
 // ---------- View Teams ----------
 
 async function openTeamsModal(eventId, title) {
   document.getElementById("teamsEventTitle").textContent = title;
   const container = document.getElementById("teamsContainer");
-  container.innerHTML = `<p class="text-muted">Loading teams...</p>`;
+  container.innerHTML = `<p class="text-muted">読み込み中...</p>`;
   new bootstrap.Modal(document.getElementById("teamsModal")).show();
 
   try {
@@ -165,7 +310,7 @@ async function openTeamsModal(eventId, title) {
     const teams = await res.json();
 
     if (teams.length === 0) {
-      container.innerHTML = `<p class="text-muted">Teams haven't been generated yet. Check back later!</p>`;
+      container.innerHTML = `<p class="text-muted">まだチームは編成されていません。締切後をお待ちください。</p>`;
       return;
     }
 
@@ -174,20 +319,175 @@ async function openTeamsModal(eventId, title) {
       const col = document.createElement("div");
       col.className = "col-md-6";
       const membersHtml = team.members
-        .map((m) => `<li>${escapeHtml(m.name)} (${escapeHtml(m.grade || "—")})</li>`)
+        .map((m) => `<li>${escapeHtml(m.name)}（${escapeHtml(m.faculty || "—")} / ${escapeHtml(m.grade || "—")}年）</li>`)
         .join("");
       col.innerHTML = `
-        <div class="card p-3">
-          <h6>Team ${team.team_number}</h6>
+        <div class="card p-3 team-card">
+          <h6>チーム ${team.team_number}${team.group_label ? ` — ${escapeHtml(team.group_label)}` : ""}</h6>
           <ul class="mb-0">${membersHtml}</ul>
         </div>
       `;
       container.appendChild(col);
     });
   } catch (err) {
-    container.innerHTML = `<p class="text-danger">Could not load teams.</p>`;
+    container.innerHTML = `<p class="text-danger">チームを読み込めませんでした。</p>`;
     console.error(err);
   }
 }
 
+// ---------- Logout ----------
+
+document.getElementById("logoutBtn").addEventListener("click", logout);
+
+// ---------- AI 相談 (Gemini-powered chat) ----------
+
+let aiChatHistory = []; // just for local display; each call is stateless server-side
+let currentAiEventId = null; // null = general chat, otherwise scoped to this event
+
+function openAiConsult(eventId, title) {
+  currentAiEventId = eventId || null;
+  document.getElementById("aiChatEventId").value = eventId || "";
+  const contextLabel = document.getElementById("aiConsultContext");
+  if (contextLabel) {
+    contextLabel.textContent = title ? `— ${title}` : "";
+  }
+  aiChatHistory = [];
+  renderAiChatLog();
+  new bootstrap.Modal(document.getElementById("aiConsultModal")).show();
+}
+
+function renderAiChatLog() {
+  const log = document.getElementById("aiChatLog");
+  if (aiChatHistory.length === 0) {
+    log.innerHTML = `<p class="text-muted small">何でも質問してください。イベントや部活、就活のことなど、お気軽にどうぞ。</p>`;
+    return;
+  }
+  log.innerHTML = aiChatHistory
+    .map((m) => `
+      <div class="ai-msg ${m.role === "user" ? "ai-msg-user" : "ai-msg-bot"}">
+        ${m.role === "bot" ? "🤖 " : ""}${escapeHtml(m.text)}
+      </div>
+    `)
+    .join("");
+  log.scrollTop = log.scrollHeight;
+}
+
+const aiChatFormEl = document.getElementById("aiChatForm");
+if (aiChatFormEl) {
+  aiChatFormEl.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("aiChatInput");
+    const message = input.value.trim();
+    if (!message) return;
+
+    aiChatHistory.push({ role: "user", text: message });
+    renderAiChatLog();
+    input.value = "";
+    input.disabled = true;
+
+    const endpoint = currentAiEventId
+      ? `${API_BASE_URL}/events/${currentAiEventId}/ai-consult`
+      : `${API_BASE_URL}/ai/consult`;
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { ...authHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "AIとの通信に失敗しました。");
+      }
+      const data = await res.json();
+      aiChatHistory.push({ role: "bot", text: data.reply });
+    } catch (err) {
+      aiChatHistory.push({ role: "bot", text: `⚠️ ${err.message}` });
+    } finally {
+      input.disabled = false;
+      renderAiChatLog();
+      input.focus();
+    }
+  });
+}
+
+const floatingAiBtnEl = document.getElementById("floatingAiBtn");
+if (floatingAiBtnEl) {
+  floatingAiBtnEl.addEventListener("click", () => openAiConsult(null, null));
+}
+
+// ---------- Comments (Q&A per event) ----------
+
+async function openCommentsModal(eventId, title) {
+  document.getElementById("commentsEventTitle").textContent = title;
+  document.getElementById("commentEventId").value = eventId;
+  await loadComments(eventId);
+  new bootstrap.Modal(document.getElementById("commentsModal")).show();
+}
+
+async function loadComments(eventId) {
+  const container = document.getElementById("commentsList");
+  container.innerHTML = `<p class="text-muted">読み込み中...</p>`;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/events/${eventId}/comments`);
+    const comments = await res.json();
+
+    if (comments.length === 0) {
+      container.innerHTML = `<p class="text-muted">まだコメントはありません。最初の質問をしてみましょう。</p>`;
+      return;
+    }
+
+    container.innerHTML = comments
+      .map((c) => {
+        const isOrganizer = c.author_type === "organizer";
+        const when = new Date(c.created_at + "Z").toLocaleString("ja-JP");
+        return `
+          <div class="comment-item ${isOrganizer ? "comment-organizer" : ""}">
+            <div class="comment-meta">
+              <strong>${escapeHtml(c.author_name)}</strong>
+              <span class="text-muted small">${when}</span>
+            </div>
+            <div class="comment-content">${escapeHtml(c.content)}</div>
+          </div>
+        `;
+      })
+      .join("");
+  } catch (err) {
+    container.innerHTML = `<p class="text-danger">コメントを読み込めませんでした。</p>`;
+    console.error(err);
+  }
+}
+
+const commentFormEl = document.getElementById("commentForm");
+if (commentFormEl) {
+  commentFormEl.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const eventId = document.getElementById("commentEventId").value;
+    const input = document.getElementById("commentInput");
+    const content = input.value.trim();
+    if (!content) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/events/${eventId}/comments`, {
+        method: "POST",
+        headers: { ...authHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "送信に失敗しました。");
+      }
+      input.value = "";
+      loadComments(eventId);
+    } catch (err) {
+      alert(err.message);
+      console.error(err);
+    }
+  });
+}
+
+// ---------- Init ----------
+
+loadProfile();
 loadEvents();
