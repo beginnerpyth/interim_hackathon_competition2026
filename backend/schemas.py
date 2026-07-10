@@ -28,6 +28,11 @@ class StudentCreate(BaseModel):
     grade: Optional[int] = None
 
 
+class StudentDeleteRequest(BaseModel):
+    username: str
+    password: str
+
+
 class StudentOut(BaseModel):
     id: int
     username: str

@@ -61,6 +61,7 @@ h1, h2, h3, h4, h5, h6, .navbar-brand,
 
 /* ---------- Hero band ---------- */
 
+/* 変更前 */
 .hero-band {
   background: var(--gradient-hero);
   padding: 3rem 0 2.75rem;
@@ -68,6 +69,7 @@ h1, h2, h3, h4, h5, h6, .navbar-brand,
   position: relative;
   overflow: hidden;
 }
+
 .hero-band::after {
   content: "";
   position: absolute; inset: 0;
@@ -86,8 +88,8 @@ h1, h2, h3, h4, h5, h6, .navbar-brand,
   line-height: 1.08; text-shadow: 0 2px 12px rgba(0,0,0,0.12);
 }
 .hero-sub { color: rgba(255,255,255,0.92); font-size: 1.08rem; max-width: 580px; }
-
 /* ---------- Search + filter bar ---------- */
+
 
 .board-controls {
   background: var(--paper); border: none; border-radius: 16px;
@@ -103,7 +105,8 @@ h1, h2, h3, h4, h5, h6, .navbar-brand,
 .filter-btn {
   font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.03em;
   border: 2px solid var(--line) !important; color: var(--slate);
-  border-radius: 10px !important; margin-left: 0.3rem;
+  border-radius: 10px !important; 
+  margin-left: 0.6rem !important; /* 間隔を約2倍に広げる */
 }
 .filter-btn.active { background: var(--gradient-btn) !important; border-color: transparent !important; color: #fff !important; }
 .filter-btn:hover:not(.active) { background-color: rgba(99,102,241,0.08) !important; color: var(--ink); }
@@ -150,7 +153,8 @@ h1, h2, h3, h4, h5, h6, .navbar-brand,
 @keyframes card-pop { from { opacity: 0; transform: translateY(14px) scale(0.97); } }
 .pin-dot { display: none; }
 .event-image { height: 175px; object-fit: cover; background-color: #EDE9FE; }
-.pin-card .card-body { padding: 1.2rem 1.25rem 1.3rem; }
+/* 変更後 */
+.pin-card .card-body { padding: 1.75rem 1.5rem 1.75rem; }
 .pin-card .card-title { font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; color: var(--ink); }
 .pin-card .card-text { color: var(--slate); font-size: 0.93rem; min-height: 1.4em; }
 
@@ -360,4 +364,38 @@ a:focus-visible, button:focus-visible, input:focus-visible, .category-tab:focus-
   color: var(--ink);
   margin-right: auto;
   border-bottom-left-radius: 4px;
+}
+/* 1. 上に不自然に飛び出していた「エムユー プラザ」を完全に消す */
+.hero-eyebrow {
+  display: none !important; /* 元の要素ごと画面から完全に消去します */
+}
+
+/* 2. 「MU PLAZA」のすぐ上に、正しい位置で大きな振り仮名を表示する */
+.hero-title {
+  font-size: 3.6rem !important; 
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 2.2rem !important; /* 振り仮名が入るスペースを上に確保 */
+  margin-bottom: 0.8rem !important; 
+  position: relative; /* 位置の基準をMU PLAZAに固定する */
+}
+
+.hero-title::before {
+  content: "エムユー プラザ" !important;
+  display: block !important;
+  visibility: visible !important;
+  position: absolute;
+  top: -1.4rem;               /* タイトルのちょうどいい真上に配置 */
+  left: 0;
+  color: #FFFFFF !important;  /* クッキリした白文字 */
+  font-family: var(--font-body);
+  font-size: 1.05rem;         /* 大きめのサイズ */
+  letter-spacing: 0.08em;     /* 読みやすい文字間隔 */
+  font-weight: 600;
+}
+
+/* 3. 「学部も学年も関係ない〜」のサイズを大きく */
+.hero-sub, .hero-sub * {
+  font-size: 1.25rem !important; 
+  line-height: 1.6 !important;
 }

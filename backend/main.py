@@ -66,6 +66,31 @@ def login_organizer(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessio
     return {"access_token": token, "token_type": "bearer", "role": "organizer"}
 
 
+@app.delete("/organizer/delete")
+def delete_organizer_account(data: schemas.OrganizerCreate, db: Session = Depends(get_db)):
+    """
+    Deletes an organizer account by verifying their username + password
+    directly in the request body — same pattern as /organizer/register and
+    /organizer/login, no bearer token required.
+
+    Also deletes every event this organizer created, which cascades to
+    that event's applications, teams, and comments (deleting each event
+    individually here, rather than a bulk query delete, so SQLAlchemy's
+    cascade="all, delete-orphan" relationships actually fire).
+    """
+    organizer = db.query(models.Organizer).filter(models.Organizer.username == data.username).first()
+    if not organizer or not auth.verify_password(data.password, organizer.hashed_password):
+        raise HTTPException(status_code=401, detail="ユーザー名またはパスワードが正しくありません。")
+
+    events = db.query(models.Event).filter(models.Event.organizer_id == organizer.id).all()
+    for event in events:
+        db.delete(event)
+
+    db.delete(organizer)
+    db.commit()
+    return {"message": f"アカウントと、あなたが作成した{len(events)}件の投稿をすべて削除しました。"}
+
+
 # ============================================================
 # STUDENT AUTH
 # ============================================================
@@ -105,6 +130,31 @@ def login_student(form_data: OAuth2PasswordRequestForm = Depends(), db: Session 
 @app.get("/student/me", response_model=schemas.StudentOut)
 def get_my_profile(student: models.Student = Depends(auth.get_current_student)):
     return student
+
+
+@app.delete("/student/delete")
+def delete_student_account(data: schemas.StudentDeleteRequest, db: Session = Depends(get_db)):
+    """
+    Deletes a student account by verifying their username + password
+    directly in the request body — same pattern as /student/register and
+    /student/login, no bearer token required.
+
+    Their past applications are kept (name/email/faculty/grade were
+    already copied onto the Application at the time they applied) but
+    unlinked from the account, so team history and organizer records
+    stay intact.
+    """
+    student = db.query(models.Student).filter(models.Student.username == data.username).first()
+    if not student or not auth.verify_password(data.password, student.hashed_password):
+        raise HTTPException(status_code=401, detail="ユーザー名またはパスワードが正しくありません。")
+
+    applications = db.query(models.Application).filter(models.Application.student_id == student.id).all()
+    for application in applications:
+        application.student_id = None
+
+    db.delete(student)
+    db.commit()
+    return {"message": "アカウントを削除しました。"}
 
 
 # ============================================================
@@ -505,46 +555,23 @@ def move_member_to_team(
 # AI 相談 (consultation chat) — powered by Gemini
 # ============================================================
 
-# ============================================================
-# AI 相談 (Gemini)
-# ============================================================
-
 @app.post("/ai/consult", response_model=schemas.AiConsultResponse)
 def ai_consult_general(
     data: schemas.AiConsultRequest,
     auth_info: dict = Depends(auth.get_current_user_any),
 ):
+    """General AI chat — not tied to any specific event."""
     if not data.message.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="メッセージを入力してください。"
-        )
+        raise HTTPException(status_code=400, detail="メッセージを入力してください。")
 
     try:
         reply = ai.ask_gemini(data.message.strip())
-
-        return schemas.AiConsultResponse(
-            reply=reply
-        )
-
     except RuntimeError as e:
-        print("CONFIG ERROR:", e)
-        raise HTTPException(
-            status_code=503,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=502, detail="AIとの通信に失敗しました。もう一度お試しください。")
 
-    except Exception as e:
-        print("==============================")
-        print("GEMINI ERROR:")
-        print(type(e))
-        print(e)
-        print("==============================")
-
-        raise HTTPException(
-            status_code=502,
-            detail=f"Gemini error: {str(e)}"
-        )
+    return schemas.AiConsultResponse(reply=reply)
 
 
 @app.post("/events/{event_id}/ai-consult", response_model=schemas.AiConsultResponse)
@@ -554,53 +581,22 @@ def ai_consult_event(
     db: Session = Depends(get_db),
     auth_info: dict = Depends(auth.get_current_user_any),
 ):
-    event = (
-        db.query(models.Event)
-        .filter(models.Event.id == event_id)
-        .first()
-    )
-
+    """AI chat scoped to a specific event/club posting, with its details as context."""
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
-        raise HTTPException(
-            status_code=404,
-            detail="Event not found"
-        )
+        raise HTTPException(status_code=404, detail="Event not found")
 
     if not data.message.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="メッセージを入力してください。"
-        )
+        raise HTTPException(status_code=400, detail="メッセージを入力してください。")
 
     try:
-        reply = ai.ask_gemini(
-            data.message.strip(),
-            event=event
-        )
-
-        return schemas.AiConsultResponse(
-            reply=reply
-        )
-
+        reply = ai.ask_gemini(data.message.strip(), event=event)
     except RuntimeError as e:
-        print("CONFIG ERROR:", e)
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=502, detail="AIとの通信に失敗しました。もう一度お試しください。")
 
-        raise HTTPException(
-            status_code=503,
-            detail=str(e)
-        )
-
-    except Exception as e:
-        print("==============================")
-        print("GEMINI ERROR:")
-        print(type(e))
-        print(e)
-        print("==============================")
-
-        raise HTTPException(
-            status_code=502,
-            detail=f"Gemini error: {str(e)}"
-        )
+    return schemas.AiConsultResponse(reply=reply)
 
 
 # ============================================================
