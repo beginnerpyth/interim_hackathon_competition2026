@@ -122,7 +122,6 @@ function renderEvents() {
             <button class="btn btn-outline-secondary btn-sm flex-fill teams-btn" data-event-id="${event.id}" data-event-title="${escapeHtml(event.title)}">チームを見る</button>
           </div>
           <button class="btn btn-outline-secondary btn-sm w-100 mt-2 comments-btn" data-event-id="${event.id}" data-event-title="${escapeHtml(event.title)}">💬 質問・コメント</button>
-          <button class="btn btn-outline-secondary btn-sm w-100 mt-2 ai-consult-btn" data-event-id="${event.id}" data-event-title="${escapeHtml(event.title)}">🤖 AIに相談</button>
         </div>
       </div>
     `;
@@ -137,9 +136,6 @@ function renderEvents() {
   });
   eventsList.querySelectorAll(".comments-btn").forEach((btn) => {
     btn.addEventListener("click", () => openCommentsModal(btn.dataset.eventId, btn.dataset.eventTitle));
-  });
-  eventsList.querySelectorAll(".ai-consult-btn").forEach((btn) => {
-    btn.addEventListener("click", () => openAiConsult(btn.dataset.eventId, btn.dataset.eventTitle));
   });
 }
 
@@ -338,83 +334,6 @@ async function openTeamsModal(eventId, title) {
 // ---------- Logout ----------
 
 document.getElementById("logoutBtn").addEventListener("click", logout);
-
-// ---------- AI 相談 (Gemini-powered chat) ----------
-
-let aiChatHistory = []; // just for local display; each call is stateless server-side
-let currentAiEventId = null; // null = general chat, otherwise scoped to this event
-
-function openAiConsult(eventId, title) {
-  currentAiEventId = eventId || null;
-  document.getElementById("aiChatEventId").value = eventId || "";
-  const contextLabel = document.getElementById("aiConsultContext");
-  if (contextLabel) {
-    contextLabel.textContent = title ? `— ${title}` : "";
-  }
-  aiChatHistory = [];
-  renderAiChatLog();
-  new bootstrap.Modal(document.getElementById("aiConsultModal")).show();
-}
-
-function renderAiChatLog() {
-  const log = document.getElementById("aiChatLog");
-  if (aiChatHistory.length === 0) {
-    log.innerHTML = `<p class="text-muted small">何でも質問してください。イベントや部活、就活のことなど、お気軽にどうぞ。</p>`;
-    return;
-  }
-  log.innerHTML = aiChatHistory
-    .map((m) => `
-      <div class="ai-msg ${m.role === "user" ? "ai-msg-user" : "ai-msg-bot"}">
-        ${m.role === "bot" ? "🤖 " : ""}${escapeHtml(m.text)}
-      </div>
-    `)
-    .join("");
-  log.scrollTop = log.scrollHeight;
-}
-
-const aiChatFormEl = document.getElementById("aiChatForm");
-if (aiChatFormEl) {
-  aiChatFormEl.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const input = document.getElementById("aiChatInput");
-    const message = input.value.trim();
-    if (!message) return;
-
-    aiChatHistory.push({ role: "user", text: message });
-    renderAiChatLog();
-    input.value = "";
-    input.disabled = true;
-
-    const endpoint = currentAiEventId
-      ? `${API_BASE_URL}/events/${currentAiEventId}/ai-consult`
-      : `${API_BASE_URL}/ai/consult`;
-
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { ...authHeader(), "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "AIとの通信に失敗しました。");
-      }
-      const data = await res.json();
-      aiChatHistory.push({ role: "bot", text: data.reply });
-    } catch (err) {
-      aiChatHistory.push({ role: "bot", text: `⚠️ ${err.message}` });
-    } finally {
-      input.disabled = false;
-      renderAiChatLog();
-      input.focus();
-    }
-  });
-}
-
-const floatingAiBtnEl = document.getElementById("floatingAiBtn");
-if (floatingAiBtnEl) {
-  floatingAiBtnEl.addEventListener("click", () => openAiConsult(null, null));
-}
 
 // ---------- Comments (Q&A per event) ----------
 

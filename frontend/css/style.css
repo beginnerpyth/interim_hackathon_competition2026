@@ -313,58 +313,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, .category-tab:focus-
   word-break: break-word;
 }
 
-/* ---------- AI 相談 chat widget ---------- */
-
-.floating-ai-btn {
-  position: fixed;
-  bottom: 1.75rem;
-  right: 1.75rem;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  border: none;
-  background: var(--gradient-btn);
-  color: #fff;
-  font-size: 1.6rem;
-  box-shadow: 0 10px 24px rgba(255,90,122,0.4);
-  cursor: pointer;
-  z-index: 1050;
-  transition: transform 0.18s ease;
-}
-.floating-ai-btn:hover {
-  transform: scale(1.08);
-}
-
-.ai-chat-log {
-  max-height: 420px;
-  overflow-y: auto;
-  padding: 0.5rem;
-  background: rgba(99,102,241,0.04);
-  border-radius: 12px;
-}
-
-.ai-msg {
-  max-width: 85%;
-  padding: 0.55rem 0.85rem;
-  border-radius: 14px;
-  margin-bottom: 0.6rem;
-  font-size: 0.92rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.ai-msg-user {
-  background: var(--gradient-btn);
-  color: #fff;
-  margin-left: auto;
-  border-bottom-right-radius: 4px;
-}
-.ai-msg-bot {
-  background: #fff;
-  border: 1px solid var(--line);
-  color: var(--ink);
-  margin-right: auto;
-  border-bottom-left-radius: 4px;
-}
 /* 1. 上に不自然に飛び出していた「エムユー プラザ」を完全に消す */
 .hero-eyebrow {
   display: none !important; /* 元の要素ごと画面から完全に消去します */

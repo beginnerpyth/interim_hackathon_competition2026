@@ -8,7 +8,6 @@ from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session, joinedload
 
-import ai
 import auth
 import matching
 import models
@@ -549,54 +548,6 @@ def move_member_to_team(
     db.commit()
     return {"message": "Member moved successfully"}
 
-
-
-# ============================================================
-# AI 相談 (consultation chat) — powered by Gemini
-# ============================================================
-
-@app.post("/ai/consult", response_model=schemas.AiConsultResponse)
-def ai_consult_general(
-    data: schemas.AiConsultRequest,
-    auth_info: dict = Depends(auth.get_current_user_any),
-):
-    """General AI chat — not tied to any specific event."""
-    if not data.message.strip():
-        raise HTTPException(status_code=400, detail="メッセージを入力してください。")
-
-    try:
-        reply = ai.ask_gemini(data.message.strip())
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=502, detail="AIとの通信に失敗しました。もう一度お試しください。")
-
-    return schemas.AiConsultResponse(reply=reply)
-
-
-@app.post("/events/{event_id}/ai-consult", response_model=schemas.AiConsultResponse)
-def ai_consult_event(
-    event_id: int,
-    data: schemas.AiConsultRequest,
-    db: Session = Depends(get_db),
-    auth_info: dict = Depends(auth.get_current_user_any),
-):
-    """AI chat scoped to a specific event/club posting, with its details as context."""
-    event = db.query(models.Event).filter(models.Event.id == event_id).first()
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-
-    if not data.message.strip():
-        raise HTTPException(status_code=400, detail="メッセージを入力してください。")
-
-    try:
-        reply = ai.ask_gemini(data.message.strip(), event=event)
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=502, detail="AIとの通信に失敗しました。もう一度お試しください。")
-
-    return schemas.AiConsultResponse(reply=reply)
 
 
 # ============================================================

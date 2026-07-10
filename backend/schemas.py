@@ -82,16 +82,6 @@ class ApplicationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ---------- AI 相談 (consultation chat) ----------
-
-class AiConsultRequest(BaseModel):
-    message: str
-
-
-class AiConsultResponse(BaseModel):
-    reply: str
-
-
 # ---------- Comments (Q&A on each event/club posting) ----------
 
 class CommentCreate(BaseModel):
